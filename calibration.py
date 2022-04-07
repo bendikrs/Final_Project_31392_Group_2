@@ -25,7 +25,6 @@ class Calibration:
         # Load the images
         images = glob.glob(self.PATH)
         assert images
-        h, w = images[0].shape[:2]
         
         # perform calibration for left images only
         for fname in images:
@@ -40,8 +39,9 @@ class Calibration:
                 self.objpoints.append(self.objp)
                 self.imgpoints.append(corners)
         
+        h, w = img.shape[:2]
         ret, self.mtx, self.dist, rvecs, tvecs = cv2.calibrateCamera(self.objpoints, self.imgpoints, gray.shape[::-1], None, None)
-        self.newcameramtx, self.roi = cv2.getOptimalNewCameraMatrix(mtx,dist,(w,h),1,(w,h))
+        self.newcameramtx, self.roi = cv2.getOptimalNewCameraMatrix(self.mtx,self.dist,(w,h),1,(w,h))
     
     def distort_img(self, img, Crop = False):
 
@@ -56,12 +56,12 @@ class Calibration:
 # some more functions
 
 
-if __name == "__main__":
+if __name__ == "__main__":
     # test code
 
-    calitest = Calibration("../data/calibration/", 9, 6)
+    calitest = Calibration("data/calibration_images/*.png", 9, 6)
 
     calitest.calibrate()
 
-    dst = calitest.distort_img(cv2.imread("../data/calibration/left-0001.jpg"), True)
+    dst = calitest.distort_img(cv2.imread("data/calibration_images/left-0001.png"), True)
     cv2.imshow("undistorted", dst)
