@@ -40,23 +40,28 @@ class Calibration:
                 self.objpoints.append(self.objp)
                 self.imgpoints.append(corners)
         
-        ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(self.objpoints, self.imgpoints, gray.shape[::-1], None, None)
-        newcameramtx, roi = cv2.getOptimalNewCameraMatrix(mtx,dist,(w,h),1,(w,h))
+        ret, self.mtx, self.dist, rvecs, tvecs = cv2.calibrateCamera(self.objpoints, self.imgpoints, gray.shape[::-1], None, None)
+        self.newcameramtx, self.roi = cv2.getOptimalNewCameraMatrix(mtx,dist,(w,h),1,(w,h))
     
     def distort_img(self, img, Crop = False):
-        #height and width of image
-        h,  w = img.shape[:2]
 
-        #create new camera matrix to undistort
-        newcameramtx, roi = cv2.getOptimalNewCameraMatrix(mtx, dist, (w,h), 1, (w,h))
-        
         #get undistortet image
-        dst = cv2.undistort(img, mtx, dist, None, newcameramtx)
+        dst = cv2.undistort(img, self.mtx, self.dist, None, self.newcameramtx)
 
+        #crop if needed
+        if Crop == True:
+            x,y,w,h = self.roi
+            dst = dst[y:y+h, x:x+w]
+        return dst
 # some more functions
-
-
 
 
 if __name == "__main__":
     # test code
+
+    calitest = Calibration("../data/calibration/", 9, 6)
+
+    calitest.calibrate()
+
+    dst = calitest.distort_img(cv2.imread("../data/calibration/left-0001.jpg"), True)
+    cv2.imshow("undistorted", dst)
