@@ -18,6 +18,8 @@ class Calibration:
         # Arrays to store object points and image points from all the images.
         self.objpoints = [] # 3d point in real world space
         self.imgpoints = [] # 2d points in image plane.
+        self.cameramatrixLeft = [] # camera matrix for left camera
+        self.cameramatrixRight = [] # camera matrix for right camera
 
     def calibrate(self):
         images = glob.glob('imgs/*.png')
@@ -38,8 +40,14 @@ class Calibration:
                                                         imgpoints.append(corners)
     
     def distort_img(self, img, Crop = False):
-        pass
+        #height and width of image
+        h,  w = img.shape[:2]
 
+        #create new camera matrix to undistort
+        newcameramtx, roi = cv2.getOptimalNewCameraMatrix(mtx, dist, (w,h), 1, (w,h))
+        
+        #get undistortet image
+        dst = cv2.undistort(img, mtx, dist, None, newcameramtx)
 
 # some more functions
 
