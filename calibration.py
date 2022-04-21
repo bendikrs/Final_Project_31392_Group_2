@@ -17,7 +17,7 @@ class Calibration:
         self.roi = None
         self.newcameramtx = None
 
-    def calibrate(self):
+    def calibrate(self,Show = False):
         
         # prepare object points, like (0,0,0), (1,0,0), (2,0,0) ....,(6,5,0)
         objp = np.zeros((self.pattern_size[0]*self.pattern_size[1],3), np.float32)
@@ -43,10 +43,16 @@ class Calibration:
             if ret == True:
                 objpoints.append(objp)
                 imgpoints.append(corners)
+
+        if Show == True:
+            img = cv2.drawChessboardCorners(img, (self.pattern_size[0],self.pattern_size[1]), corners,ret)
+            cv2.imshow('img',img)
+            cv2.waitKey(0)
+                                                
         
         h, w = img.shape[:2]
         ret, self.mtx, self.dist, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, gray.shape[::-1], None, None)
-        self.newcameramtx, self.roi = cv2.getOptimalNewCameraMatrix(self.mtx,self.dist,(w,h),1,(w,h))
+        self.newcameramtx, self.roi = cv2.getOptimalNewCameraMatrix(self.mtx,self.dist,(w,h),0,(w,h))
     
     def distort_img(self, img, Crop = False):
 
@@ -58,17 +64,24 @@ class Calibration:
             x,y,w,h = self.roi
             dst = dst[y:y+h, x:x+w]
         return dst
-# some more functions
+
+    def rectify(self):
+        pass
 
 
 if __name__ == "__main__":
     # test code
 
-    calitest = Calibration("data/calibration_images/*.png", 6, 9)
+    left = Calibration("data/calibration_images/left*.png", 6, 9)
+    right = Calibration("data/calibration_images/right*.png", 6, 9)
     print("1")
-    calitest.calibrate()
+    left.calibrate(Show = True)
+    right.calibrate(Show = True)
     print("2")
-    cv2.imshow("distorted", cv2.imread("data/calibration_images/left-0001.png")
-    dst = calitest.distort_img(cv2.imread("data/calibration_images/left-0001.png"), True)
+    cv2.imshow("left distorted", cv2.imread("data/calibration_images/left-0001.png"))
+    cv2.imshow("right distorted", cv2.imread("data/calibration_images/right-0001.png"))
+    cv2.waitKey(0)
+    dst = left.distort_img(cv2.imread("data/calibration_images/left-0001.png"), True)
     print("3")
     cv2.imshow("undistorted", dst)
+    cv2.waitKey(0)
