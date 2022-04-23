@@ -123,7 +123,7 @@ class Calibration:
         self.right_map = cv2.initUndistortRectifyMap(M2,d2,R2,P2,dims,0)
 
 
-    def drawlines(self, img1,img2,lines,pts1,pts2):
+    def _drawlines(self, img1,img2,lines,pts1,pts2):
         ''' img1 - image on which we draw the epilines for the points in img2
             lines - corresponding epilines '''
         r,c = img1.shape
@@ -143,17 +143,77 @@ class Calibration:
 
 
     def right_remap(self,img):
-        pass
+        return cv2.remap(img,self.right_map[0],self.right_map[1],cv2.INTER_NEAREST, cv2.BORDER_CONSTANT)
+
+    def draw_epilines(self,left_img,right_img, nb_matches = 200):
+        left_img = cv2.cvtColor(left_img,cv2.COLOR_BGR2GRAY)
+        right_img = cv2.cvtColor(right_img,cv2.COLOR_BGR2GRAY)
+
+        sift = cv2.xfeatures2d.SIFT_create()
+        # find the keypoints and descriptors with SIFT
+        kp1, des1 = sift.detectAndCompute(left_img, None)
+        kp2, des2 = sift.detectAndCompute(right_img, None)
+
+        # create BFMatcher object
+        bf = cv2.BFMatcher()
+        # Match descriptors.
+        matches = bf.match(des1,des2)
+
+
+        # Sort them in the order of their distance (i.e. best matches first).
+        matches = sorted(matches, key = lambda x:x.distance)
+
+        good = []
+        pts1 = []
+        pts2 = []
+
+        for m in matches[:nb_matches]:
+                good.append(m)
+                pts1.append(kp1[m.queryIdx].pt)
+                pts2.append(kp2[m.trainIdx].pt)
+
+        pts1 = np.int32(pts1)
+        pts2 = np.int32(pts2)
+                            
+
+        #Implement findFundamentalMat here:
+        F, mask = cv2.findFundamentalMat(pts1,pts2,cv2.FM_8POINT)
+
+        # We select only inlier points
+        pts1 = pts1[mask.ravel() == 1]
+        pts2 = pts2[mask.ravel() == 1]
+
+        # Find epilines corresponding to points in right image (second image) and
+        # drawing its lines on left image
+        lines1 = cv2.computeCorrespondEpilines(pts2.reshape(-1, 1, 2), 2 ,F)
+        lines1 = lines1.reshape(-1, 3)
+        img5, img6 = self._drawlines(left_img, right_img, lines1, pts1, pts2)
+
+        # Find epilines corresponding to points in left image (first image) and
+        # drawing its lines on right image
+        lines2 = cv2.computeCorrespondEpilines(pts1.reshape(-1, 1, 2), 1, F)
+        lines2 = lines2.reshape(-1, 3)
+        img3, img4 = self._drawlines(right_img, left_img, lines2, pts2, pts1)
+        fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(18,18))
+        ax[0].imshow(img5)
+        ax[0].set_title('left image')
+        ax[1].imshow(img3)
+        ax[1].set_title('right image')
+
 
 if __name__ == "__main__":
     # test code
 
     cali = Calibration("data/calibration_images/*.png", 6, 9)
-    print("1")
+    print("-------------- Calibrating --------------")
     cali.calibrate()
-    print("2")
-    cv2.imshow("before", cv2.imread("data/calibration_images/left-0001.png"))
-    dst = cali.left_remap(cv2.imread("data/calibration_images/left-0001.png"))
-    print("3")
-    cv2.imshow("after", dst)
-    cv2.waitKey(0)
+    
+    img_left = cv2.imread("data/calibration_images/left-0001.png")
+    img_right = cv2.imread("data/calibration_images/right-0001.png")
+    cali.draw_epilines(img_left,img_right)
+    
+    print("--------------- Remapping ----------------")
+    dst_left = cali.left_remap(img_left)
+    dst_right = cali.right_remap(img_right)
+    cali.draw_epilines(dst_left,dst_right)
+    plt.show()
