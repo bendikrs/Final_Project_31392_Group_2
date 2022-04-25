@@ -42,9 +42,11 @@ class Calibration:
         #calibrate the right camera
         path = self.PATH[0:ind] + "right" + self.PATH[ind:]
         print(path)
-        self.right_mtx, self.left_dist, self.left_roi, self.left_cameramtx, self.right_imgpoints = self._calibrate(path,Show)
+        self.right_mtx, self.right_dist, self.right_roi, self.right_cameramtx, self.right_imgpoints = self._calibrate(path,Show)
         
-        self._rectify(self.img_shape,Show)
+        #self._rectify(self.img_shape,Show)
+        self._rectify2()
+
 
     def _calibrate(self, Path, Show):
         
@@ -99,18 +101,18 @@ class Calibration:
 
     def _rectify(self, dims, Show = False):
         flags = 0
-        flags |= cv2.CALIB_FIX_INTRINSIC
-        # flags |= cv2.CALIB_FIX_PRINCIPAL_POINT
-        flags |= cv2.CALIB_USE_INTRINSIC_GUESS
-        flags |= cv2.CALIB_FIX_FOCAL_LENGTH
-        # flags |= cv2.CALIB_FIX_ASPECT_RATIO
-        flags |= cv2.CALIB_ZERO_TANGENT_DIST
-        # flags |= cv2.CALIB_RATIONAL_MODEL
+        #flags |= cv2.CALIB_FIX_INTRINSIC
+        flags |= cv2.CALIB_FIX_PRINCIPAL_POINT
+        #flags |= cv2.CALIB_USE_INTRINSIC_GUESS
+        #flags |= cv2.CALIB_FIX_FOCAL_LENGTH
+        flags |= cv2.CALIB_FIX_ASPECT_RATIO
+        #flags |= cv2.CALIB_ZERO_TANGENT_DIST
+        #flags |= cv2.CALIB_RATIONAL_MODEL
         # flags |= cv2.CALIB_SAME_FOCAL_LENGTH
         # flags |= cv2.CALIB_FIX_K3
         # flags |= cv2.CALIB_FIX_K4
         # flags |= cv2.CALIB_FIX_K5
-        stereocalib_criteria = (cv2.TERM_CRITERIA_MAX_ITER +                                                                                                                                                cv2.TERM_CRITERIA_EPS, 100, 1e-5)
+        stereocalib_criteria = (cv2.TERM_CRITERIA_MAX_ITER + cv2.TERM_CRITERIA_EPS, 2000, 1e-5)
                                                              
         ret, M1, d1, M2, d2, R, T, E, F = cv2.stereoCalibrate(self.objpoints, self.left_imgpoints,
                                                               self.right_imgpoints, self.left_mtx, self.left_dist, 
@@ -119,9 +121,66 @@ class Calibration:
         
         R1, R2, P1, P2, Q, roi1, roi2 = cv2.stereoRectify(M1,d1,M2,d2,dims,R,T) 
         
-        self.left_map = cv2.initUndistortRectifyMap(M1,d1,R1,P1,dims,0)
-        self.right_map = cv2.initUndistortRectifyMap(M2,d2,R2,P2,dims,0)
+        self.left_map = cv2.initUndistortRectifyMap(M1,d1,R1,P1,dims,cv2.CV_32FC1)
+        self.right_map = cv2.initUndistortRectifyMap(M2,d2,R2,P2,dims,cv2.CV_32FC1)
+    
+    def _rectify2(self):
+        # Load undistorted images
+        img_left = cv2.imread("data/calibration_images/left-0001.png",0)
+        img_right = cv2.imread("data/calibration_images/right-0001.png",0)
 
+        # Create a sift detector
+        sift = cv2.SIFT_create()
+
+        # Find the keypoints and descriptors with SIFT
+        kp_left, des_left = sift.detectAndCompute(img_left, None)
+        kp_right, des_right = sift.detectAndCompute(img_right, None)
+        kp_img_left = cv2.drawKeypoints(img_left, kp_left, img_left, flags=cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
+        kp_img_right = cv2.drawKeypoints(img_right, kp_right, img_right, flags=cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
+
+        f, (ax1, ax2) = plt.subplots(1,2, figsize=(15,15))
+        ax1.imshow(kp_img_left)
+        ax2.imshow(kp_img_right)
+        plt.figure(figsize = (10,10))
+
+        matches = cv2.BFMatcher().match(des_left, des_right)
+
+        # Sort them in the order of their distance (i.e. best matches first).
+        matches = sorted(matches, key = lambda x:x.distance)
+
+        nb_matches = 200
+
+        good = []
+        pts1 = []
+        pts2 = []
+
+        # Using 200 best matches
+        for m in matches[:nb_matches]:
+            good.append(m)
+            # Extract points corresponding to matches.
+            pts1.append(kp_left[m.queryIdx].pt)
+            pts2.append(kp_right[m.trainIdx].pt)
+
+        pts1 = np.int32(pts1)
+        pts2 = np.int32(pts2) 
+
+        # get fundamental matrix
+        F, mask =cv2.findFundamentalMat(pts1, pts2, method=cv2.FM_RANSAC)
+        print(F)
+
+        # remove outliers
+        pts1 = pts1[mask.ravel() == 1]
+        pts2 = pts2[mask.ravel() == 1]
+
+        E = self.left_cameramtx.T@F@self.right_cameramtx
+        R_right, _, t_right = cv2.decomposeEssentialMat(E)
+        R_left = np.identity(3)
+        t_left = np.zeros(shape=(3,1))
+        P_left = np.hstack((self.left_cameramtx@R_left, self.left_cameramtx@t_left))
+        P_right = np.hstack((self.right_cameramtx@R_right, self.right_cameramtx@t_right))
+
+        self.left_map= cv2.initUndistortRectifyMap(self.left_cameramtx,self.left_dist,R_left,P_left,self.img_shape,cv2.CV_32FC1)
+        self.right_map = cv2.initUndistortRectifyMap(self.right_cameramtx,self.right_dist,R_right,P_right,self.img_shape,cv2.CV_32FC1)
 
     def _drawlines(self, img1,img2,lines,pts1,pts2):
         ''' img1 - image on which we draw the epilines for the points in img2
@@ -139,12 +198,19 @@ class Calibration:
         return img1,img2
         
     def left_remap(self,img):
-        return cv2.remap(img,self.left_map[0],self.left_map[1],cv2.INTER_NEAREST, cv2.BORDER_CONSTANT)
+        dst = cv2.remap(img,self.left_map[0],self.left_map[1],cv2.INTER_NEAREST, cv2.BORDER_CONSTANT)
 
+        x,y,w,h = self.left_roi
+        dst = dst[y:y+h, x:x+w]
+        return dst
 
     def right_remap(self,img):
-        return cv2.remap(img,self.right_map[0],self.right_map[1],cv2.INTER_NEAREST, cv2.BORDER_CONSTANT)
+        dst = cv2.remap(img,self.right_map[0],self.right_map[1],cv2.INTER_NEAREST, cv2.BORDER_CONSTANT)
 
+        x,y,w,h = self.right_roi
+        dst = dst[y:y+h, x:x+w]
+        return dst
+   
     def draw_epilines(self,left_img,right_img, nb_matches = 200):
         left_img = cv2.cvtColor(left_img,cv2.COLOR_BGR2GRAY)
         right_img = cv2.cvtColor(right_img,cv2.COLOR_BGR2GRAY)
