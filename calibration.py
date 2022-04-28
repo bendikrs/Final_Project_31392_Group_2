@@ -2,7 +2,7 @@ import numpy as np
 import cv2
 import glob
 import matplotlib.pyplot as plt
-
+import pickle
 
 
 class Calibration:
@@ -173,8 +173,8 @@ class Calibration:
         
         #flann = cv2.DescriptorMatcher_create(cv2.DescriptorMatcher_FLANNBASED)
         #matches = flann.match(des1, des2)
-
-
+        
+        
         # Sort them in the order of their distance (i.e. best matches first).
         matches = sorted(matches, key = lambda x:x.distance)
 
@@ -189,20 +189,23 @@ class Calibration:
 
         pts1 = np.int32(pts1)
         pts2 = np.int32(pts2)
-                            
-        # We select only inlier points
-        #pts1 = pts1[mask.ravel() == 1]
-        #pts2 = pts2[mask.ravel() == 1]
-
+        #Implement findFundamentalMat here:
+        if self.F is None:
+            F, mask = cv2.findFundamentalMat(pts1,pts2,cv2.FM_8POINT)
+            # We select only inlier points
+            pts1 = pts1[mask.ravel() == 1]
+            pts2 = pts2[mask.ravel() == 1]
+        else:
+            F = self.F
         # Find epilines corresponding to points in right image (second image) and
         # drawing its lines on left image
-        lines1 = cv2.computeCorrespondEpilines(pts2.reshape(-1, 1, 2), 2 ,self.F)
+        lines1 = cv2.computeCorrespondEpilines(pts2.reshape(-1, 1, 2), 2 ,F)
         lines1 = lines1.reshape(-1, 3)
         img5, img6 = self._drawlines(left_img, right_img, lines1, pts1, pts2)
 
         # Find epilines corresponding to points in left image (first image) and
         # drawing its lines on right image
-        lines2 = cv2.computeCorrespondEpilines(pts1.reshape(-1, 1, 2), 1, self.F)
+        lines2 = cv2.computeCorrespondEpilines(pts1.reshape(-1, 1, 2), 1, F)
         lines2 = lines2.reshape(-1, 3)
         img3, img4 = self._drawlines(right_img, left_img, lines2, pts2, pts1)
         fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(18,18))
@@ -211,51 +214,80 @@ class Calibration:
         ax[1].imshow(img3)
         ax[1].set_title('right image')
 
+    def draw_manual_lines(self, img1,img2):
+
+        cv2.line(img1, (0, 450), (1250, 450), (255, 0, 0), 2)
+        cv2.line(img1, (0, 60), (1250, 60), (255, 0, 0), 2)
+        cv2.line(img1, (0, 300), (1250, 300), (255, 0, 0), 2)
+        cv2.line(img1, (0, 375), (1250, 375), (255, 0, 0), 2)
+        cv2.line(img1, (0, 600), (1250, 600), (255, 0, 0), 2)
+        
+        cv2.line(img2, (0, 450), (1250, 450), (255, 0, 0), 2)
+        cv2.line(img2, (0, 60), (1250, 60), (255, 0, 0), 2)
+        cv2.line(img2, (0, 300), (1250, 300), (255, 0, 0), 2)
+        cv2.line(img2, (0, 375), (1250, 375), (255, 0, 0), 2)
+        cv2.line(img2, (0, 600), (1250, 600), (255, 0, 0), 2)
+        
+        return img1,img2
 
     def save(self):
+        dict_out = {'F': self.F, 'R_l': self.R_l, 'P_l': self.P_l,
+                    'map_l': self.left_map, 'R_r': self.R_r, 
+                    'P_r': self.P_r, 'map_r': self.right_map}
+
+        f = open("Calibration_result.bin","wb")
+        pickle.dump(dict_out, f)
+        f.close
+        
         f = open("Calibration_result.txt","w")
         f.write("F = " + str(self.F))
-        f.write("Left Camera: \n")
-        f.write("   R = " + str(self.R_l))
-        f.write("   P = " + str(self.P_l))
-        f.write("   Map = " + str(self.left_map))
-        f.write("Right Camera: \n")
-        f.write("   R = " + str(self.R_r))
-        f.write("   P = " + str(self.P_r))
-        f.write("   Map = " + str(self.right_map))
+        f.write("\n\nLeft Camera: ")
+        f.write("\n   R = " + str(self.R_l))
+        f.write("\n   P = " + str(self.P_l))
+        f.write("\n\nRight Camera: ")
+        f.write("\n   R = " + str(self.R_r))
+        f.write("\n   P = " + str(self.P_r))
+        
+    def load(self,bin_file):
+        with open(bin_file,'rb') as f:
+            dict_in = pickle.load(f)
+        self.F = dict_in['F']
+        self.R_l = dict_in['R_l']
+        self.P_l = dict_in['P_l']
+        self.left_map = dict_in['map_l']
+        self.R_r = dict_in['R_r']
+        self.P_r = dict_in['P_r']
+        self.right_map = dict_in['map_r']
+        
+
 
 if __name__ == "__main__":
     # test code
 
     cali = Calibration("data/calibration_images/*.png", 6, 9)
-    print("-------------- Calibrating --------------")
-    cali.calibrate()
-    
     img_left = cv2.imread("data/calibration_images/left-0001.png")
     img_right = cv2.imread("data/calibration_images/right-0001.png")
-    cali.draw_epilines(img_left,img_right,20)
+    cali.draw_epilines(img_left,img_right,50)
+    
+
+    print("-------------- Calibrating --------------")
+    cali.calibrate()
     
     print("--------------- Remapping ----------------")
     dst_left = cali.left_remap(img_left)
     dst_right = cali.right_remap(img_right)
-    cali.draw_epilines(dst_left,dst_right,20)
+    cali.draw_epilines(dst_left,dst_right,50)
 
     print("--------------- Saving -------------------")
     cali.save()
+    
+    print("--------------- Loading ------------------")
+    cali.load("Calibration_result.bin")
+    print(cali.F)
+    print(cali.R_l)
+    print(cali.P_l)
 
-
-
-
-    left_test = dst_left.copy()
-    right_test = dst_right.copy()
-    cv2.line(left_test, (0, 600), (1250, 600), (255, 0, 0), 2)
-    cv2.line(left_test, (0, 60), (1250, 60), (255, 0, 0), 2)
-    cv2.line(left_test, (0, 300), (1250, 300), (255, 0, 0), 2)
-    cv2.line(right_test, (0, 600), (1250, 600), (255, 0, 0), 2)
-    cv2.line(right_test, (0, 60), (1250, 60), (255, 0, 0), 2)
-    cv2.line(right_test, (0, 300), (1250, 300), (255, 0, 0), 2)
-
-
+    left_test, right_test = cali.draw_manual_lines(dst_left,dst_right)
     fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(18,18))
     ax[0].imshow(left_test)
     ax[0].set_title('left image')
