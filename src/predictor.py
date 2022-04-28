@@ -6,11 +6,11 @@ from tqdm import tqdm
 import glob
 
 class Predictor:
-    def __init__(self, imgs, modelName='bestest.pt', modelPath='data/yoloModels/', outputPath='data/yoloPredictions/'):
+    def __init__(self, imgs, modelName='bestest.pt', modelPath='../data/yoloModels/', outputPath='../data/yoloPredictions/'):
         self.imgs = imgs
         self.outputPath = outputPath
         self.modelName = modelName
-        self.model = torch.hub.load('src/yolov5','custom', path=modelPath+modelName, source='local', _verbose=False)
+        self.model = torch.hub.load('yolov5','custom', path=modelPath+modelName, source='local', _verbose=False)
         self.results = [] # [[[xmin, xmax, ymin, ymax, certainty, classID, className, [centerX, centerY]], ...], ...]
         self.getPredictions()
 
