@@ -2,7 +2,7 @@
 import cv2
 import numpy as np
 from matplotlib import pyplot as plt
-
+from src import objectDetect
 
 
 cap = cv2.VideoCapture('Robots.mp4')
