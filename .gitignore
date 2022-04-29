@@ -1,5 +1,6 @@
 data/Stereo_conveyor_with_occlusions
 data/Stereo_conveyor_without_occlusions
+data/results
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

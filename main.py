@@ -8,10 +8,11 @@ import os
 
 # cap = cv2.VideoCapture('Robots.mp4')
 
-path = 'data/conveyorImages/'
-imgs = [os.path.join(path, f) for f in os.listdir(path) if f.endswith('.png')]
-print(imgs)
-predictor = Predictor(imgs, 'bestest.pt')
+# path = 'data/Stereo_conveyor_without_occlusions/left'
+# imgs = [os.path.join(path, f) for f in os.listdir(path) if f.endswith('.png')]
+# print(imgs[0])
+path = 'data/Stereo_conveyor_without_occlusions/left'
+predictor = Predictor(imgs=path, modelName='yolo5s.pt', outputPath='data/results/Stereo_conveyor_without_occlusions/left')
 
 # # read first frame
 # ret, prev_frame = cap.read()
