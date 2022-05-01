@@ -11,8 +11,10 @@ import os
 # path = 'data/Stereo_conveyor_without_occlusions/left'
 # imgs = [os.path.join(path, f) for f in os.listdir(path) if f.endswith('.png')]
 # print(imgs[0])
-path = 'data/Stereo_conveyor_without_occlusions/left'
-predictor = Predictor(imgs=path, modelName='yolo5s.pt', outputPath='data/results/Stereo_conveyor_without_occlusions/left')
+# path = 'data/Stereo_conveyor_without_occlusions/left'
+path = 'data/conveyorImages'
+# predictor = Predictor(imgs=path, modelName='yolo5s.pt', outputPath='data/results/Stereo_conveyor_without_occlusions/left')
+predictor = Predictor(imgs=path, modelName='bestest.pt', outputPath='data/results/Stereo_conveyor_without_occlusions/left')
 
 # # read first frame
 # ret, prev_frame = cap.read()
