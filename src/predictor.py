@@ -24,7 +24,7 @@ class Predictor:
             self.model = torch.hub.load('src/yolov5','custom', path=modelPath+modelName, source='local', _verbose=False, force_reload=True)
 
         self.model.conf = 0.32
-        self.results = [] # [[[xmin, xmax, ymin, ymax, certainty, classID, className, [centerX, centerY]], ...], ...]
+        self.results = [] # [[[xmin, ymin, xmax, ymax, certainty, classID, className, [centerX, centerY]], ...], ...]
         self.getPredictions()
 
 
@@ -43,6 +43,7 @@ class Predictor:
                 
                 center = self.getCenter(*self.results[-1][-1][:4])
                 self.results[-1][-1].append(center)
+                self.totalPredictions += 1
 
         # Pickle results in outputPath
         if not os.path.exists(f'{self.outputPath}/results.pkl'):
@@ -57,7 +58,7 @@ class Predictor:
                     # certaintyIndex = res.index(max([x[4] for x in res])) # Find index of prediction with highest certainty
                     # oldResult[i].append(res[certaintyIndex])
                     self.totalPredictions += 1
-                    oldResult[i].append(res[0])
+                    oldResult[i][0] = res[0]
             self.results = oldResult
 
             with open(f'{self.outputPath}/results.pkl', 'wb') as f:
@@ -69,7 +70,7 @@ class Predictor:
 
 
 
-    def getCenter(self, xmin, xmax, ymin, ymax):
+    def getCenter(self, xmin, ymin, xmax, ymax):
         return np.array([(xmin + xmax)/2, (ymin + ymax)/2]).astype(int)
 
 
@@ -80,7 +81,7 @@ if __name__== '__main__':
     # imgs = imgs[0:482] # without occlusions
     imgs = imgs[0:487] # with occlusions
     # pred = Predictor(imgs=imgs, modelName='yolov5s.pt', outputPath='data/results/Stereo_conveyor_with_occlusions/left')
-    pred = Predictor(imgs=imgs, modelName='bestest.pt', outputPath='data/results/Stereo_conveyor_with_occlusions/left')
+    pred = Predictor(imgs=imgs, modelName='only_boxes.pt', outputPath='data/results/Stereo_conveyor_with_occlusions/left')
     
     # with open(f'data/results/Stereo_conveyor_without_occlusions/left/results.pkl', 'rb') as f:
     #     oldResult = pickle.load(f)
