@@ -74,15 +74,85 @@ class Predictor:
         return np.array([(xmin + xmax)/2, (ymin + ymax)/2]).astype(int)
 
 
-if __name__== '__main__':
-    imgs = 'data/Stereo_conveyor_with_occlusions/left'
-    imgs = [os.path.join(imgs, f) for f in os.listdir(imgs) if f.endswith('.png')]
+def makeVideo(imgFiles, picklePath, videoName='results.avi'):
+    '''Makes a video with coordinates of bounding boxes added to the frames.
+    input:
+        imgFiles: list of image filepaths
+        picklePath: path to pickle file containing results
+        videoName: name of video to be saved
+    output:
+        video: saved videofile in current directory
+    '''
+    with open(picklePath, 'rb') as f:
+        results = pickle.load(f)
 
-    # imgs = imgs[0:482] # without occlusions
-    imgs = imgs[0:487] # with occlusions
-    # pred = Predictor(imgs=imgs, modelName='yolov5s.pt', outputPath='data/results/Stereo_conveyor_with_occlusions/left')
-    pred = Predictor(imgs=imgs, modelName='only_boxes.pt', outputPath='data/results/Stereo_conveyor_with_occlusions/left')
+    size = (1280, 720)
+    fps = 30
     
-    # with open(f'data/results/Stereo_conveyor_without_occlusions/left/results.pkl', 'rb') as f:
+    fourcc = cv2.VideoWriter_fourcc('M','J','P','G')
+    out = cv2.VideoWriter(videoName, fourcc, fps, size)
+
+    for i, imgFile in enumerate(imgFiles):
+        img = cv2.imread(imgFile) # Read image
+        if len(results[i][0]):
+            text = f'Detected: x={results[i][0][7][0]}px , y={results[i][0][7][1]}px, z=-m'
+        else:
+            text = f'Detected: x= -px , y= -px, z= -m'
+        
+
+        cv2.putText(img, 
+                text, 
+                (50, 50), 
+                cv2.FONT_HERSHEY_SIMPLEX, 1, 
+                (0, 255, 255), 
+                2, 
+                cv2.LINE_4)
+        out.write(img)
+    out.release()
+
+def addBoundingBox(img, xmin, ymin, xmax, ymax, boxText, color=(0, 255, 0), thickness=2):
+    '''
+    input:
+        img: image to add bounding box to
+        xmin: xmin coordinate of bounding box
+        ymin: ymin coordinate of bounding box
+        xmax: xmax coordinate of bounding box
+        ymax: ymax coordinate of bounding box
+        boxText: text to be added to bounding box
+        color: color of bounding box
+        thickness: thickness of bounding box
+    output:
+        img: image with bounding box added
+    '''
+    cv2.rectangle(img, (xmin, ymin), (xmax, ymax), color, thickness)
+    cv2.putText(img,
+                boxText,
+                (xmin, ymin),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.5,
+                (0, 0, 0),
+                2,
+                cv2.LINE_4)
+    return img
+
+
+
+
+
+
+if __name__== '__main__':
+    imgs = 'data/results/Stereo_conveyor_with_occlusions/left'
+    imgs = [os.path.join(imgs, f) for f in os.listdir(imgs) if (f.endswith('.png') or f.endswith('.jpg'))]
+    # imgs = imgs[0:482] # without occlusions
+    # imgs = imgs[0:487] # with occlusions
+    # imgs = imgs[90:100] # with occlusions
+
+    # pred = Predictor(imgs=imgs, modelName='yolov5s.pt', outputPath='data/results/Stereo_conveyor_with_occlusions/left')
+    # pred = Predictor(imgs=imgs, modelName='only_boxes.pt', outputPath='data/results/Stereo_conveyor_with_occlusions/left')
+    # pred = Predictor(imgs=imgs, modelName='bestest.pt', outputPath='data/results/Stereo_conveyor_with_occlusions/left')
+    
+    makeVideo(imgFiles=imgs, picklePath='data/results/Stereo_conveyor_with_occlusions/left/results.pkl')
+
+    # with open(f'src/results_without_occlusions.pkl', 'rb') as f:
     #     oldResult = pickle.load(f)
-    #     print(len(oldResult))
+    #     print(oldResult[100])
