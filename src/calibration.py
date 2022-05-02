@@ -80,10 +80,10 @@ class Calibration:
                 self.objpoints.append(objp)
                 imgpoints.append(corners)
 
-        if Show == True:
-            img = cv2.drawChessboardCorners(img, (self.pattern_size[0],self.pattern_size[1]), corners,ret)
-            cv2.imshow('img',img)
-            cv2.waitKey(0)
+            if Show == True:
+                img = cv2.drawChessboardCorners(img, (self.pattern_size[0],self.pattern_size[1]), corners,ret)
+                cv2.imshow('img',img)
+                cv2.waitKey(0)
                                                 
         
         h, w = img.shape[:2]
@@ -275,7 +275,7 @@ if __name__ == "__main__":
     
 
     print("-------------- Calibrating --------------")
-    cali.calibrate()
+    cali.calibrate(True)
     
     print("--------------- Remapping ----------------")
     dst_left = cali.left_remap(img_left)

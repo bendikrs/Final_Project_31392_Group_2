@@ -21,7 +21,7 @@ def get_depth(img_left, img_right, px,py):
     stereo.setSpeckleWindowSize(1)
 
     disp = stereo.compute(gray_left, gray_right).astype(np.float32) / 16.0
-    depth = 2.45 * 120 / disp[px,py]
+    depth = 2.45 * 120 / disp[py,px]
     return depth, disp
 
 
@@ -29,31 +29,26 @@ def get_depth(img_left, img_right, px,py):
 
 if __name__ == "__main__":
     calib = Calibration(None,None,None)
-    calib.load("../Calibration_result.bin")
+    calib.load("../data/Calibration_result.bin")
 
     left_imgs = glob.glob("../data/conveyorImages/left/*")
     right_imgs = glob.glob("../data/conveyorImages/right/*")
     assert left_imgs
     assert right_imgs
     
-    left_img = cv2.imread(left_imgs[135])
-    left_img = calib.left_remap(left_img)
-    right_img = cv2.imread(right_imgs[135])
-    right_img = calib.right_remap(right_img)
+    fig = plt.figure() 
+    ax = fig.add_subplot(1,1,1)
+    for i in range(len(left_imgs)):
+        left_img = cv2.imread(left_imgs[i])
+        left_img = calib.left_remap(left_img)
+        right_img = cv2.imread(right_imgs[i])
+        right_img = calib.right_remap(right_img)
     
-    
-    fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(18,18))
-    ax[0].imshow(left_img)
-    ax[0].set_title('left image')
-    ax[1].imshow(right_img)
-    ax[1].set_title('right image')
-
-    
-    depth, disp = get_depth(left_img,right_img, 100,100)
-    
-    plt.figure(figsize=(18,18))
-    plt.gray()
-    plt.imshow(disp)
+        depth, disp = get_depth(left_img,right_img, 100,100)
+   
+        ax.clear(); ax.imshow(disp);
+        plt.pause(0.05)
     plt.show()
+
 
 
