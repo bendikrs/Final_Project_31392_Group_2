@@ -21,7 +21,7 @@ def get_depth(img_left, img_right, px,py):
     stereo.setSpeckleWindowSize(1)
 
     disp = stereo.compute(gray_left, gray_right).astype(np.float32) / 16.0
-    depth = 2.45 * 120 / disp[py,px]
+    depth = 653 * 120 / (disp[py,px] * 1000)
     return depth, disp
 
 
@@ -31,8 +31,8 @@ if __name__ == "__main__":
     calib = Calibration(None,None,None)
     calib.load("../data/Calibration_result.bin")
 
-    left_imgs = glob.glob("../data/conveyorImages/left/*")
-    right_imgs = glob.glob("../data/conveyorImages/right/*")
+    left_imgs = glob.glob("../../left/*")
+    right_imgs = glob.glob("../../right/*")
     assert left_imgs
     assert right_imgs
     
