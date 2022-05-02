@@ -1,40 +1,59 @@
 import numpy as np
 from matplotlib import pyplot as plt
 
-class kalman:
-    def __init__(self, A, B, C, Q, R, x0, P0):
-        self.A = A
-        self.B = B
-        self.C = C
-        self.Q = Q
-        self.R = R
-        self.x = x0
+class Kalman:
+    def __init__(self, measurements,x0,P0):
+        self.measurements = measurements
+        self.x = x0.T
         self.P = P0
-        self.x_hat = x0
-        self.P_hat = P0
-        self.K = np.zeros((2,1))
-        self.x_hat_hist = []
-        self.P_hat_hist = []
-        self.x_hist = []
-        self.P_hist = []
-        self.z_hist = []
+        self.v = None # velocity vector measured in distance pr timestep
+        self.Q = np.eye(3)
+        self.R = None
+        self.x = None
 
-    def update(self, z):
-        self.x_hat = self.A @ self.x + self.B @ z
-        self.P_hat = self.A @ self.P @ self.A.T + self.Q
-        self.K = self.P_hat @ self.C.T @ np.linalg.inv(self.C @ self.P_hat @ self.C.T + self.R)
-        self.x = self.x_hat + self.K @ (z - self.C @ self.x_hat)
-        self.P = (np.identity(2) - self.K @ self.C) @ self.P_hat
-        self.x_hat_hist.append(self.x_hat)
-        self.P_hat_hist.append(self.P_hat)
-        self.x_hist.append(self.x)
-        self.P_hist.append(self.P)
-        self.z_hist.append(z)
+    
+    def kalmanFilter(self,measurement, newData,x_prediction, P_prediction):
+        """
+        Kalman filter for position
+        input:
+            measurement: measured x,y,z
+            x_prediction: x,y,z prediction from previous iteration
+            P_prediction: covariance matrix from previous iteration
+            Q: process noise covariance matrix
+            R: measurement noise covariance matrix
+            k: iteration number
+        output:
+            x_prediction: x,y,z prediction from current iteration
+            P_prediction: covariance matrix from current iteration
+        """
 
-    def plot(self):
-        plt.plot(self.x_hat_hist)
-        plt.plot(self.P_hat_hist)
-        plt.plot(self.x_hist)
-        plt.plot(self.P_hist)
-        plt.plot(self.z_hist)
-        plt.show()
+        A = np.eye(3)
+        B = self.v
+
+        # Prediction
+        x_prediction = A @ x_prediction + B
+        P_prediction = A @ P_prediction @ A.T + self.Q
+
+        if newData: 
+            # Update
+            H = np.eye(3)
+            K = P_prediction @ H.T @ np.linalg.inv(H @ P_prediction @ H.T + self.R)
+            x_prediction = x_prediction + K @ (measurement - H @ x_prediction)
+            P_prediction = (np.eye(3) - K @ H) @ P_prediction
+
+
+        return x_prediction, P_prediction
+
+    def positionUpdate(self):
+        estimates = []
+        newData = 1
+        for i in self.measurements.T:
+            if i == np.zeros(3):
+                newData = 0
+            newData = 1
+            self.x, self.P = self.kalmanFilter(i,newData,self.x,self.P)
+            estimates.append(self.x)
+        return estimates
+
+
+    
