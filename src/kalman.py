@@ -2,17 +2,18 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 class Kalman:
-    def __init__(self, measurements,x0,P0):
+    def __init__(self, measurements, v, x0, P0):
         self.measurements = measurements
-        self.x = x0.T
+        self.x = x0
         self.P = P0
-        self.v = None # velocity vector measured in distance pr timestep
-        self.Q = np.eye(3)
+        self.v = v # velocity vector measured in distance pr timestep
+        self.Q = None
         self.R = None
         self.x = None
-
+        self.kalmanEstimates = self.positionUpdate()
     
-    def kalmanFilter(self,measurement, newData,x_prediction, P_prediction):
+    def kalmanPosition(self, measurement, x_prediction, P_prediction):
+        newData = 1
         """
         Kalman filter for position
         input:
@@ -26,34 +27,51 @@ class Kalman:
             x_prediction: x,y,z prediction from current iteration
             P_prediction: covariance matrix from current iteration
         """
-
+        
         A = np.eye(3)
-        B = self.v
+        B = self.v 
+        print(A @ x_prediction)
 
         # Prediction
         x_prediction = A @ x_prediction + B
         P_prediction = A @ P_prediction @ A.T + self.Q
 
-        if newData: 
-            # Update
+
+        # Update
+        if measurement[0] != 0:
             H = np.eye(3)
             K = P_prediction @ H.T @ np.linalg.inv(H @ P_prediction @ H.T + self.R)
             x_prediction = x_prediction + K @ (measurement - H @ x_prediction)
             P_prediction = (np.eye(3) - K @ H) @ P_prediction
+        
+        ############### USE THIS WHEN ACTUAL LISTS ARE INPUT ###############
+        # if newData:
+        #     H = np.eye(3)
+        #     K = P_prediction @ H.T @ np.linalg.inv(H @ P_prediction @ H.T + R)
+        #     x_prediction = x_prediction + K @ (measurement - H @ x_prediction)
+        #     P_prediction = (np.eye(3) - K @ H) @ P_prediction
 
 
         return x_prediction, P_prediction
 
     def positionUpdate(self):
-        estimates = []
+        print(self.x)
+        print(self.measurements.T[i])
+        kalman_estimates = np.zeros_like(self.measurements)
+        kalman_estimates[0] = self.x
         newData = 1
-        for i in self.measurements.T:
-            if i == np.zeros(3):
-                newData = 0
-            newData = 1
-            self.x, self.P = self.kalmanFilter(i,newData,self.x,self.P)
-            estimates.append(self.x)
-        return estimates
+        for i in range(len(self.measurements)):
+
+            self.x, self.P = self.kalmanPosition(self.measurements.T[i], self.x, self.P)
+            kalman_estimates[i+1] = self.x
+        return kalman_estimates
+    
+
+
+
+
+
+
 
 
     
