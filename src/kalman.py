@@ -76,7 +76,36 @@ class Kalman:
     
 
 
+def get_kalman_data(results):
+    """
+    gets data in bendik format
+    returns kalman estimated positions 3 x n
+    """
+    measurements = np.zeros((len(results), 3))
+    v = (np.array([results[-50][0][7]]) - np.array([results[0][0][7]]))[0] / 130
+    # print(results)
+    for i in range(0,len(results)):
+        if len(results [i]):
 
+            if len(np.array(results[i][0][7])):
+                x = np.array(results[i][0][7])
+            else:
+                x = np.array([[0,0,0]])
+            measurements[i] = np.array(x)
+            
+    r_xy = 1
+    r_z = 1
+    x_init = measurements[0]
+
+    P_init = np.eye(3)
+    Q_init = np.eye(3)
+    R_init = np.array([[r_xy,0,0],[0,r_xy,0],[0,0,r_z]])
+
+    kalman = Kalman(measurements.T, v, x_init, P_init, R_init)
+
+    kalman_estimates = kalman.positionUpdate()
+
+    return kalman_estimates.T
 
 
 
