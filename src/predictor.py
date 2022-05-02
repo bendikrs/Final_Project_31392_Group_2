@@ -9,11 +9,26 @@ from calibration import *
 from depth_map import *
 
 class Predictor:
-    def __init__(self, imgs, modelName='bestest.pt', modelPath='data/yoloModels/', outputPath='data/results'):
-        if  type(imgs) == str:
-            self.imgs = [os.path.join(imgs, f) for f in os.listdir(imgs) if f.endswith('.png')]
+    def __init__(self, left_imgs, right_imgs=None, sliceIndex=(0,-1), modelName='bestest.pt', modelPath='data/yoloModels/', outputPath='data/results'):
+        if  type(left_imgs) == str:
+            self.left_imgs = [os.path.join(left_imgs, f) for f in os.listdir(left_imgs) if f.endswith('.png') or f.endswith('.jpg')]
         else:
-            self.imgs = imgs
+            self.left_imgs = left_imgs
+        if  type(right_imgs) == str:
+            self.right_imgs = [os.path.join(right_imgs, f) for f in os.listdir(right_imgs) if f.endswith('.png') or f.endswith('.jpg')]
+        else:
+            self.right_imgs = right_imgs
+        assert len(self.left_imgs) == len(self.right_imgs)
+        
+        self.sliceIndex = sliceIndex
+        self.left_imgs = self.left_imgs[self.sliceIndex[0]:self.sliceIndex[1]]
+        self.right_imgs = self.right_imgs[self.sliceIndex[0]:self.sliceIndex[1]]
+        if self.sliceIndex == (0,-1): 
+            self.sliceIndex = 'all'
+        else:
+            self.sliceIndex = f'{self.sliceIndex[0]}-{self.sliceIndex[1]}'
+
+
         self.outputPath = outputPath
         self.modelName = modelName
         self.totalPredictions = 0
@@ -31,12 +46,25 @@ class Predictor:
 
 
     def __str__(self):
-        return f'{len(self.imgs)} images, {self.name}'
+        return f'{len(self.left_imgs)} images, {self.name}'
+
+    def calculateDepth(self, left_img, right_img, x_px, y_px):
+        calib = Calibration(None,None,None)
+        calib.load("Calibration_result.bin")
+
+        left_img = cv2.imread(left_img)
+        left_img = calib.left_remap(left_img)
+        right_img = cv2.imread(right_img)
+        right_img = calib.right_remap(right_img)
+ 
+        depth, disp = get_depth_wls(left_img, right_img, x_px, y_px)    
+
+        return depth
 
     def getPredictions(self):
-        for img in tqdm(self.imgs):
-            currResult = self.model(img).pandas().xyxy[0].to_numpy()
-            self.model(img).save(labels=True, save_dir=f'{os.getcwd()}/{self.outputPath}/')
+        for i in tqdm(range(len(self.left_imgs))):
+            currResult = self.model(self.left_imgs[i]).pandas().xyxy[0].to_numpy()
+            self.model(self.left_imgs[i]).save(labels=True, save_dir=f'{os.getcwd()}/{self.outputPath}_{self.sliceIndex}/')
             self.results.append([])
             for j, res in enumerate(currResult):
                 self.results[-1].append([])
@@ -45,14 +73,17 @@ class Predictor:
                 
                 center = self.getCenter(*self.results[-1][-1][:4])
                 self.results[-1][-1].append(center)
+
+                z = self.calculateDepth(self.left_imgs[i], self.right_imgs[i], center[0], center[1])
+                self.results[-1][-1][7].append(z)
                 self.totalPredictions += 1
 
         # Pickle results in outputPath
-        if not os.path.exists(f'{self.outputPath}/results.pkl'):
-            with open(f'{self.outputPath}/results.pkl', 'wb') as f:
+        if not os.path.exists(f'{self.outputPath}_{self.sliceIndex}/results_{self.sliceIndex}.pkl'):
+            with open(f'{self.outputPath}_{self.sliceIndex}/results_{self.sliceIndex}.pkl', 'wb') as f:
                 pickle.dump(self.results, f)
         else:
-            with open(f'{self.outputPath}/results.pkl', 'rb') as f:
+            with open(f'{self.outputPath}_{self.sliceIndex}/results_{self.sliceIndex}.pkl', 'rb') as f:
                 oldResult = pickle.load(f)
 
             for i, res in enumerate(self.results):
@@ -73,10 +104,10 @@ class Predictor:
 
 
     def getCenter(self, xmin, ymin, xmax, ymax):
-        return np.array([(xmin + xmax)/2, (ymin + ymax)/2]).astype(int)
+        return [int((xmin + xmax)/2), int((ymin + ymax)/2)]
 
 
-def makeVideo(imgFiles, picklePath, videoName='results.avi'):
+def makeVideo(imgPath, picklePath, videoName='results.avi'):
     '''Makes a video with coordinates and bounding boxes added to the frames.
     input:
         imgFiles: list of image filepaths
@@ -85,6 +116,16 @@ def makeVideo(imgFiles, picklePath, videoName='results.avi'):
     output:
         video: saved videofile in current directory
     '''
+    slicing = picklePath.split('_')[-1]
+    if slicing == 'all':
+        slicing = (0,-1)
+    else:
+        slicing = slicing.split('-')
+        slicing = [int(slicing[0]), int(slicing[1].split('.')[0])]
+        print(slicing)
+
+    imgFiles = [os.path.join(imgPath, f) for f in os.listdir(imgPath) if (f.endswith('.png') or f.endswith('.jpg'))]
+    imgFiles = imgFiles[slicing[0]:slicing[1]]
 
     if type(picklePath) == str:
         with open(picklePath, 'rb') as f:
@@ -92,9 +133,10 @@ def makeVideo(imgFiles, picklePath, videoName='results.avi'):
     else:
         results = picklePath
 
+    assert len(imgFiles) == len(results)
+
     size = (1280, 720)
     fps = 30
-    
     fourcc = cv2.VideoWriter_fourcc('M','J','P','G')
     out = cv2.VideoWriter(videoName, fourcc, fps, size)
 
@@ -156,47 +198,21 @@ def addBoundingBox(img, xmin, ymin, xmax, ymax, boxText, color=(0, 255, 0), thic
 
 
 if __name__== '__main__':
-    imgs = 'data/Stereo_conveyor_without_occlusions/left'
-    imgs = [os.path.join(imgs, f) for f in os.listdir(imgs) if (f.endswith('.png') or f.endswith('.jpg'))]
+    left_imgs = 'data/Stereo_conveyor_without_occlusions/left'
+    right_imgs = 'data/Stereo_conveyor_without_occlusions/right'
+    # imgs = [os.path.join(imgs, f) for f in os.listdir(imgs) if (f.endswith('.png') or f.endswith('.jpg'))]
     # imgs = imgs[0:482] # without occlusions
     # imgs = imgs[0:487] # with occlusions
     # imgs = imgs[90:100] # with occlusions
 
-    # pred = Predictor(imgs=imgs, modelName='yolov5s.pt', outputPath='data/results/Stereo_conveyor_with_occlusions/left')
+    # imgs = imgs[949:1153] # with occlusions, cup
+
+    pred = Predictor(left_imgs, right_imgs, sliceIndex=(1064, 1244), modelName='yolov5s.pt', outputPath='data/results/Stereo_conveyor_with_occlusions/cup')
     # pred = Predictor(imgs=imgs, modelName='only_boxes.pt', outputPath='data/results/Stereo_conveyor_with_occlusions/left')
     # pred = Predictor(imgs=imgs, modelName='bestest.pt', outputPath='data/results/Stereo_conveyor_with_occlusions/left')
-
-    # with open(f'src/results_without_occlusions.pkl', 'rb') as f:
-    #     oldResult = pickle.load(f)
-    #     print(oldResult[100])
     
 
-    '''
-    results = pickle.load(open('src/results_without_occlusions.pkl', 'rb'))
-    calib = Calibration(None,None,None)
-    calib.load("Calibration_result.bin")
-    left_imgs = glob.glob("data/Stereo_conveyor_without_occlusions/left/*")
-    right_imgs = glob.glob("data/Stereo_conveyor_without_occlusions/right/*")
-    assert len(left_imgs) == len(right_imgs)
-    print(len(left_imgs), len(results))
-    assert len(left_imgs) == len(results)
-
-    for i in tqdm(range(len(results))):
-        left_img = cv2.imread(left_imgs[i])
-        left_img = calib.left_remap(left_img)
-        right_img = cv2.imread(right_imgs[i])
-        right_img = calib.right_remap(right_img)
-
-        if len(results[i]) > 0:
-            x_px, y_px = results[i][0][7][0], results[i][0][7][1]
-            depth, disp = get_depth(left_img, right_img, x_px, y_px)    
-            results[i][0][7] = [x_px, y_px, depth]
-            # print(results[i])
+    
 
 
-    with open('testing.pkl', 'wb') as f:
-            pickle.dump(results, f)
-    '''
-
-
-    makeVideo(imgFiles=imgs, picklePath='src/results_without_occlusions_and_depth.pkl', videoName='new_results.avi')
+    # makeVideo(imgPath=left_imgs, picklePath='data/results/Stereo_conveyor_with_occlusions/cup_949-1153/results_949-1153.pkl', videoName='new_results.avi')
