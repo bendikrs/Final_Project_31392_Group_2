@@ -5,6 +5,8 @@ import cv2
 from tqdm import tqdm
 import glob
 import pickle
+from calibration import *
+from depth_map import *
 
 class Predictor:
     def __init__(self, imgs, modelName='bestest.pt', modelPath='data/yoloModels/', outputPath='data/results'):
@@ -75,16 +77,20 @@ class Predictor:
 
 
 def makeVideo(imgFiles, picklePath, videoName='results.avi'):
-    '''Makes a video with coordinates of bounding boxes added to the frames.
+    '''Makes a video with coordinates and bounding boxes added to the frames.
     input:
         imgFiles: list of image filepaths
-        picklePath: path to pickle file containing results
+        picklePath: path to pickle file containing results, or the results list
         videoName: name of video to be saved
     output:
         video: saved videofile in current directory
     '''
-    with open(picklePath, 'rb') as f:
-        results = pickle.load(f)
+
+    if type(picklePath) == str:
+        with open(picklePath, 'rb') as f:
+            results = pickle.load(f)
+    else:
+        results = picklePath
 
     size = (1280, 720)
     fps = 30
@@ -92,10 +98,12 @@ def makeVideo(imgFiles, picklePath, videoName='results.avi'):
     fourcc = cv2.VideoWriter_fourcc('M','J','P','G')
     out = cv2.VideoWriter(videoName, fourcc, fps, size)
 
-    for i, imgFile in enumerate(imgFiles):
+    for i, imgFile in tqdm(enumerate(imgFiles)):
         img = cv2.imread(imgFile) # Read image
-        if len(results[i][0]):
-            text = f'Detected: x={results[i][0][7][0]}px , y={results[i][0][7][1]}px, z=-m'
+        # print(results[i])
+        if results[i]:
+            text = f'Detected: x={results[i][0][7][0]}px , y={results[i][0][7][1]}px, z={results[i][0][7][2]:.2f}m'
+            img = addBoundingBox(img, *results[i][0][:4], text[:8])
         else:
             text = f'Detected: x= -px , y= -px, z= -m'
         
@@ -124,13 +132,20 @@ def addBoundingBox(img, xmin, ymin, xmax, ymax, boxText, color=(0, 255, 0), thic
     output:
         img: image with bounding box added
     '''
+    xmin, xmax, ymin, ymax = int(xmin), int(xmax), int(ymin), int(ymax)
+    
+    # check if box is too big
+    x_max, y_max = 300, 300
+    if xmax - xmin > x_max or ymax - ymin > y_max:
+        return img
+
     cv2.rectangle(img, (xmin, ymin), (xmax, ymax), color, thickness)
     cv2.putText(img,
                 boxText,
-                (xmin, ymin),
+                (xmin, ymin-2),
                 cv2.FONT_HERSHEY_SIMPLEX,
-                0.5,
-                (0, 0, 0),
+                0.8,
+                color,
                 2,
                 cv2.LINE_4)
     return img
@@ -141,7 +156,7 @@ def addBoundingBox(img, xmin, ymin, xmax, ymax, boxText, color=(0, 255, 0), thic
 
 
 if __name__== '__main__':
-    imgs = 'data/results/Stereo_conveyor_with_occlusions/left'
+    imgs = 'data/Stereo_conveyor_without_occlusions/left'
     imgs = [os.path.join(imgs, f) for f in os.listdir(imgs) if (f.endswith('.png') or f.endswith('.jpg'))]
     # imgs = imgs[0:482] # without occlusions
     # imgs = imgs[0:487] # with occlusions
@@ -150,9 +165,38 @@ if __name__== '__main__':
     # pred = Predictor(imgs=imgs, modelName='yolov5s.pt', outputPath='data/results/Stereo_conveyor_with_occlusions/left')
     # pred = Predictor(imgs=imgs, modelName='only_boxes.pt', outputPath='data/results/Stereo_conveyor_with_occlusions/left')
     # pred = Predictor(imgs=imgs, modelName='bestest.pt', outputPath='data/results/Stereo_conveyor_with_occlusions/left')
-    
-    makeVideo(imgFiles=imgs, picklePath='data/results/Stereo_conveyor_with_occlusions/left/results.pkl')
 
     # with open(f'src/results_without_occlusions.pkl', 'rb') as f:
     #     oldResult = pickle.load(f)
     #     print(oldResult[100])
+    
+
+    '''
+    results = pickle.load(open('src/results_without_occlusions.pkl', 'rb'))
+    calib = Calibration(None,None,None)
+    calib.load("Calibration_result.bin")
+    left_imgs = glob.glob("data/Stereo_conveyor_without_occlusions/left/*")
+    right_imgs = glob.glob("data/Stereo_conveyor_without_occlusions/right/*")
+    assert len(left_imgs) == len(right_imgs)
+    print(len(left_imgs), len(results))
+    assert len(left_imgs) == len(results)
+
+    for i in tqdm(range(len(results))):
+        left_img = cv2.imread(left_imgs[i])
+        left_img = calib.left_remap(left_img)
+        right_img = cv2.imread(right_imgs[i])
+        right_img = calib.right_remap(right_img)
+
+        if len(results[i]) > 0:
+            x_px, y_px = results[i][0][7][0], results[i][0][7][1]
+            depth, disp = get_depth(left_img, right_img, x_px, y_px)    
+            results[i][0][7] = [x_px, y_px, depth]
+            # print(results[i])
+
+
+    with open('testing.pkl', 'wb') as f:
+            pickle.dump(results, f)
+    '''
+
+
+    makeVideo(imgFiles=imgs, picklePath='src/results_without_occlusions_and_depth.pkl', videoName='new_results.avi')
