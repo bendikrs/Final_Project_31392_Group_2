@@ -2,15 +2,25 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 class Kalman:
-    def __init__(self, measurements, v, x0, P0):
+    def __init__(self, measurements, v, x0, P0, R):
+        """
+        Kalman filter for position
+        input:
+            measurements: measured x,y,z in a 3xn array
+            v: velocity vector
+            x0: initial x,y,z position (measurements.T[0] f.ex)
+            P0: initial covariance matrix
+            R: measurement noise covariance matrix
+        """
+
         self.measurements = measurements
         self.x = x0
         self.P = P0
         self.v = v # velocity vector measured in distance pr timestep
-        self.Q = None
-        self.R = None
-        self.x = None
-        self.kalmanEstimates = self.positionUpdate()
+        self.Q = np.eye(3)
+        self.R = R
+
+        # self.kalmanEstimates = self.positionUpdate()
     
     def kalmanPosition(self, measurement, x_prediction, P_prediction):
         newData = 1
@@ -30,7 +40,7 @@ class Kalman:
         
         A = np.eye(3)
         B = self.v 
-        print(A @ x_prediction)
+
 
         # Prediction
         x_prediction = A @ x_prediction + B
@@ -55,16 +65,14 @@ class Kalman:
         return x_prediction, P_prediction
 
     def positionUpdate(self):
-        print(self.x)
-        print(self.measurements.T[i])
-        kalman_estimates = np.zeros_like(self.measurements)
+        kalman_estimates = np.zeros_like(self.measurements).T
         kalman_estimates[0] = self.x
         newData = 1
-        for i in range(len(self.measurements)):
-
+        for i in range(len(self.measurements[0])-1):
             self.x, self.P = self.kalmanPosition(self.measurements.T[i], self.x, self.P)
             kalman_estimates[i+1] = self.x
         return kalman_estimates
+
     
 
 
