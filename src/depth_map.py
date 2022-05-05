@@ -42,14 +42,14 @@ def get_depth_wls(img_left, img_right, px,py):
     left_matcher.setSpeckleWindowSize(1)
 
     right_matcher = cv2.ximgproc.createRightMatcher(left_matcher);
-    left_disp = left_matcher.compute(gray_left, gray_right);
-    right_disp = right_matcher.compute(gray_right, gray_left);
+    left_disp = left_matcher.compute(gray_left, gray_right).astype(np.float32) / 16;
+    right_disp = right_matcher.compute(gray_right, gray_left).astype(np.float32) / 16;
 
     # Now create DisparityWLSFilter
     wls_filter = cv2.ximgproc.createDisparityWLSFilter(left_matcher);
     wls_filter.setLambda(lmbda);
     wls_filter.setSigmaColor(sigma);
-    filtered_disp = wls_filter.filter(left_disp, gray_left, disparity_map_right=right_disp).astype(np.float32) / 16.0;
+    filtered_disp = wls_filter.filter(left_disp, gray_left, disparity_map_right=right_disp);
     depth = 653 * 120 /(filtered_disp[py,px]*1000)
 
     return depth, filtered_disp 
@@ -68,7 +68,7 @@ if __name__ == "__main__":
     
     fig = plt.figure() 
     ax = fig.add_subplot(1,1,1)
-    for i in range(len(left_imgs)):
+    for i in range(175):
         left_img = cv2.imread(left_imgs[i])
         left_img = calib.left_remap(left_img)
         right_img = cv2.imread(right_imgs[i])
