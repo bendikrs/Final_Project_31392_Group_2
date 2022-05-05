@@ -34,22 +34,20 @@ class Predictor:
         self.outputPath = outputPath
         self.boxModelName = boxModelName
         self.totalPredictions = 0
-        # if self.modelName == 'yolov5s.pt':
-            # self.model = torch.hub.load('ultralytics/yolov5', 'yolov5s.pt', _verbose=False, force_reload=True)
+
         self.model_yolo = torch.hub.load('src/yolov5', 'custom', path='src/yolov5/yolov5s.pt', source='local', _verbose=False, force_reload=True)
         self.model_yolo.classes = [41, 73] # cup and book
-    
-        # else:
-        self.model_box = torch.hub.load('src/yolov5', 'custom', path=modelPath+boxModelName, source='local', _verbose=False, force_reload=True)
-
         self.model_yolo.conf = 0.32
+    
+        self.model_box = torch.hub.load('src/yolov5', 'custom', path=modelPath+boxModelName, source='local', _verbose=False, force_reload=True)
         self.model_box.conf = 0.15
+
         self.results = [] # [[[xmin, ymin, xmax, ymax, certainty, classID, className, [centerX, centerY, centerZ]], ...], ...]
         self.getPredictions()
 
 
     def __str__(self):
-        return f'{len(self.left_imgs)} images, {self.name}'
+        return f'{len(self.left_imgs)} images, {self.totalPredictions} predictions'
 
     def calculateDepth(self, left_img, right_img, x_px, y_px):
         calib = Calibration(None,None,None)
@@ -73,9 +71,9 @@ class Predictor:
                 currResult = self.model_yolo(self.left_imgs[i]).pandas().xyxy[0].to_numpy()
                 self.model_yolo(self.left_imgs[i]).save(labels=True, save_dir=f'{os.getcwd()}/{self.outputPath}/')
             self.results.append([])
-            for j, res in enumerate(currResult):
+            for res in currResult:
                 self.results[-1].append([])
-                for k, val in enumerate(res):
+                for val in res:
                     self.results[-1][-1].append(val)
                 
                 center = self.getCenter(*self.results[-1][-1][:4])
@@ -95,8 +93,6 @@ class Predictor:
 
             for i, res in enumerate(self.results):
                 if len(res) > 0:
-                    # certaintyIndex = res.index(max([x[4] for x in res])) # Find index of prediction with highest certainty
-                    # oldResult[i].append(res[certaintyIndex])
                     self.totalPredictions += 1
                     oldResult[i][0] = res[0]
             self.results = oldResult
@@ -107,11 +103,16 @@ class Predictor:
 
         print(f'Saved results to {self.picklePath}, {len(self.results)} images, added {self.totalPredictions} predictions')
 
-
-
-
     def getCenter(self, xmin, ymin, xmax, ymax):
         return [int((xmin + xmax)/2), int((ymin + ymax)/2)]
+
+def read_pickle(path):
+    '''
+    Reads a pickle file and returns the data
+    '''
+    with open(path, 'rb') as f:
+        results = pickle.load(f)
+    return results
 
 def makeVideo(imgPath, picklePath, slicing=(0, -1), videoName='results.avi'):
     '''Makes a video with coordinates and bounding boxes added to the frames.
@@ -133,7 +134,12 @@ def makeVideo(imgPath, picklePath, slicing=(0, -1), videoName='results.avi'):
     else:
         results = picklePath
 
-    assert len(imgFiles) == len(results)
+    if (len(imgFiles) < len(results)):
+        results = results[:len(imgFiles)]
+    else:
+        imgFiles = imgFiles[:len(results)]
+
+        
 
     size = (1280, 720)
     fps = 30
@@ -142,14 +148,12 @@ def makeVideo(imgPath, picklePath, slicing=(0, -1), videoName='results.avi'):
 
     for i, imgFile in tqdm(enumerate(imgFiles)):
         img = cv2.imread(imgFile) # Read image
-        # print(results[i])
         if results[i]:
             text = f'Detected: x={results[i][0][7][0]}px , y={results[i][0][7][1]}px, z={results[i][0][7][2]:.2f}m'
             img = addBoundingBox(img, *results[i][0][:4], boxText=str(results[i][0][6]))
         else:
             text = f'Detected: x= -px , y= -px, z= -m'
         
-
         cv2.putText(img,
                 text, 
                 (50, 50), 
@@ -201,9 +205,8 @@ if __name__== '__main__':
 
     left_imgs = 'data/Stereo_conveyor_without_occlusions/left'
     right_imgs = 'data/Stereo_conveyor_without_occlusions/right'
-    pred = Predictor(left_imgs, right_imgs, boxModelName= 'bestest.pt', boxSlice=482, outputPath='data/results/Stereo_conveyor_without_occlusions/final')
-    # pred = Predictor(imgs=imgs, modelName='only_boxes.pt', outputPath='data/results/Stereo_conveyor_with_occlusions/left')
-    # pred = Predictor(imgs=imgs, modelName='bestest.pt', outputPath='data/results/Stereo_conveyor_with_occlusions/left')
+    output_path = 'data/results/final_no_occlusions'
     
-
-    makeVideo(imgPath=left_imgs, picklePath='data/results/Stereo_conveyor_without_occlusions/final/results.pkl', slicing=(0, -1), videoName='without_occlusions_final.avi')
+    pred = Predictor(left_imgs, right_imgs, boxModelName= 'bestest.pt',sliceIndex=(50, 60), boxSlice=482, outputPath=output_path)
+    
+    makeVideo(imgPath=left_imgs, picklePath=f'{output_path}/results.pkl', slicing=(0, -1), videoName='testing.avi')
