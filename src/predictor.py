@@ -34,7 +34,7 @@ class Predictor:
         ## Kalman --------------------
         self.kalmanX = np.array([1000, 300, 0.05])
         self.kalmanP = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
-        self.v = np.array([-3.6307692, 1.038461, -1.2915557e-04])
+        self.v = np.array([-3.6307692, 1.038461, -1.2915557e-03])
         self.R = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 10]])
         self.Q = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
         # -----------------------------
@@ -275,8 +275,8 @@ if __name__== '__main__':
 
     left_imgs = 'data/Stereo_conveyor_with_occlusions/left'
     right_imgs = 'data/Stereo_conveyor_with_occlusions/right'
-    output_path = 'data/results/test_with_occlusion_kalman'
+    output_path = 'data/results/test_with_occlusion_kalman_TEST'
     slicing =(0, -1)
 
     pred = Predictor(left_imgs, right_imgs, boxModelName= 'only_boxes_best.pt',sliceIndex=slicing, boxSlice=487, outputPath=output_path)
-    makeVideo(imgPath=left_imgs, picklePath=f'{output_path}/results.pkl', slicing=slicing, videoName='with_ocl_final.avi')
+    makeVideo(imgPath=left_imgs, picklePath=f'{output_path}/results.pkl', slicing=slicing, videoName='with_ocl_final_TEST.avi')
