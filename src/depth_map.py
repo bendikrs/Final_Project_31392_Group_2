@@ -21,7 +21,6 @@ def get_depth(img_left, img_right, px,py):
     stereo.setSpeckleWindowSize(1)
 
     disp = stereo.compute(gray_left, gray_right).astype(np.float32) / 16.0
-    disp = cv2.bilateralFilter(disp,9,20,75)
     depth = 653 * 120 / (disp[py,px] * 1000)
     return depth, disp
 
@@ -50,7 +49,7 @@ def get_depth_wls(img_left, img_right, px,py):
     wls_filter = cv2.ximgproc.createDisparityWLSFilter(left_matcher);
     wls_filter.setLambda(lmbda);
     wls_filter.setSigmaColor(sigma);
-    filtered_disp = wls_filter.filter(left_disp, gray_left, disparity_map_right=right_disp);
+    filtered_disp = wls_filter.filter(left_disp, gray_left, disparity_map_right=right_disp).astype(np.float32) / 16.0;
     depth = 653 * 120 /(filtered_disp[py,px]*1000)
 
     return depth, filtered_disp 
