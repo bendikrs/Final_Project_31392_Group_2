@@ -80,9 +80,18 @@ class Predictor:
                 self.model_yolo(self.left_imgs[i]).save(labels=True, save_dir=f'{os.getcwd()}/{self.outputPath}/')
             self.results.append([])
 
-            if len(currResult) > 0:
+            resIndex = 0
+            usePred = False
+            for j in range(len(currResult)): # check if the box is okay size
+                xmin, ymin, xmax, ymax = currResult[j][:4]
+                if abs(ymax - ymin) < 400:
+                    resIndex = j
+                    usePred = True
+                    
+
+            if len(currResult) > 0 and usePred:
                 self.results[-1].append([])
-                for val in currResult[0]:
+                for val in currResult[resIndex]:
                     self.results[-1][-1].append(val)
                 
                 center = self.getCenter(*self.results[-1][-1][:4])
@@ -222,8 +231,9 @@ def makeVideo(imgPath, picklePath, slicing=(0, -1), videoName='results.avi'):
                 cv2.LINE_4)
         out.write(img)
     out.release()
+    print(f'Video saved as {videoName}')
 
-def addBoundingBox(img, xmin, ymin, xmax, ymax, boxText, color=(255, 0, 0), thickness=2):
+def addBoundingBox(img, xmin, ymin, xmax, ymax, boxText, color=(255, 0, 50), thickness=2):
     '''
     input:
         img: image to add bounding box to
@@ -266,8 +276,7 @@ if __name__== '__main__':
     left_imgs = 'data/Stereo_conveyor_with_occlusions/left'
     right_imgs = 'data/Stereo_conveyor_with_occlusions/right'
     output_path = 'data/results/test_with_occlusion_kalman'
-    slicing =(100, 500)
+    slicing =(0, -1)
 
-    pred = Predictor(left_imgs, right_imgs, boxModelName= 'only_boxes_best.pt',sliceIndex=slicing, boxSlice=482, outputPath=output_path)
-    
-    makeVideo(imgPath=left_imgs, picklePath=f'{output_path}/results.pkl', slicing=slicing, videoName='with_ocl.avi')
+    pred = Predictor(left_imgs, right_imgs, boxModelName= 'only_boxes_best.pt',sliceIndex=slicing, boxSlice=487, outputPath=output_path)
+    makeVideo(imgPath=left_imgs, picklePath=f'{output_path}/results.pkl', slicing=slicing, videoName='with_ocl_final.avi')
