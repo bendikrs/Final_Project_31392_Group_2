@@ -1,3 +1,4 @@
+from sklearn.cluster import SpectralBiclustering
 import torch
 import numpy as np
 import os
@@ -30,6 +31,13 @@ class Predictor:
         else:
             self.sliceIndex = f'{self.sliceIndex[0]}-{self.sliceIndex[1]}'
 
+        ## Kalman --------------------
+        self.kalmanX = np.array([1000, 300, 0.05])
+        self.kalmanP = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
+        self.v = np.array([-3.6307692, 1.038461, -1.2915557e-04])
+        self.R = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 10]])
+        self.Q = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
+        # -----------------------------
 
         self.outputPath = outputPath
         self.boxModelName = boxModelName
@@ -57,8 +65,8 @@ class Predictor:
         left_img = calib.left_remap(left_img)
         right_img = cv2.imread(right_img)
         right_img = calib.right_remap(right_img)
- 
-        depth, disp = get_depth(left_img, right_img, x_px, y_px)    
+
+        depth, disp = get_depth_wls(left_img, right_img, x_px, y_px)  
 
         return depth
 
@@ -71,40 +79,74 @@ class Predictor:
                 currResult = self.model_yolo(self.left_imgs[i]).pandas().xyxy[0].to_numpy()
                 self.model_yolo(self.left_imgs[i]).save(labels=True, save_dir=f'{os.getcwd()}/{self.outputPath}/')
             self.results.append([])
-            for res in currResult:
+
+            if len(currResult) > 0:
                 self.results[-1].append([])
-                for val in res:
+                for val in currResult[0]:
                     self.results[-1][-1].append(val)
                 
                 center = self.getCenter(*self.results[-1][-1][:4])
                 self.results[-1][-1].append(center)
 
+            
                 z = self.calculateDepth(self.left_imgs[i], self.right_imgs[i], center[0], center[1])
                 self.results[-1][-1][7].append(z)
+
+                self.results[-1][-1].append(self.kalman_position(self.results[-1][-1][7]))
+
+
                 self.totalPredictions += 1
+            else:
+                self.results[-1].append([])
+                self.results[-1][-1] = [-1, -1, -1, -1, -1, -1, '-1', [-1,-1,-1], self.kalman_position(np.array([0,0,0]))]
 
         # Pickle results in outputPath
-        if not os.path.exists(self.picklePath):
-            with open(self.picklePath, 'wb') as f:
-                pickle.dump(self.results, f)
-        else:
-            with open(self.picklePath, 'rb') as f:
-                oldResult = pickle.load(f)
+        with open(self.picklePath, 'wb') as f:
+            pickle.dump(self.results, f)
+        # if not os.path.exists(self.picklePath):
+        #     pass
+        # else:
+        #     with open(self.picklePath, 'rb') as f:
+        #         oldResult = pickle.load(f)
 
-            for i, res in enumerate(self.results):
-                if len(res) > 0:
-                    self.totalPredictions += 1
-                    oldResult[i][0] = res[0]
-            self.results = oldResult
+        #     for i, res in enumerate(self.results):
+        #         if len(res) > 0:
+        #             self.totalPredictions += 1
+        #             oldResult[i][0] = res[0]
+        #     self.results = oldResult
 
-            with open(self.picklePath, 'wb') as f:
-                pickle.dump(self.results, f)
+        #     with open(self.picklePath, 'wb') as f:
+        #         pickle.dump(self.results, f)
 
 
         print(f'Saved results to {self.picklePath}, {len(self.results)} images, added {self.totalPredictions} predictions')
 
     def getCenter(self, xmin, ymin, xmax, ymax):
         return [int((xmin + xmax)/2), int((ymin + ymax)/2)]
+
+    def kalman_position(self, z):
+        """
+        Kalman filter for position
+        input:
+            z: measurement
+        output:
+            x: filtered position
+        """
+        A = np.eye(3)
+        B = self.v 
+
+        # Prediction
+        self.kalmanX = A @ self.kalmanX + B
+        self.kalmanP = A @ self.kalmanP @ A.T + self.Q
+
+        # Update
+        if z[0] != 0:
+            H = np.eye(3)
+            K = self.kalmanP @ H.T @ np.linalg.inv(H @ self.kalmanP @ H.T + self.R)
+            self.kalmanX = self.kalmanX + K @ (z - H @ self.kalmanX)
+            self.kalmanP = (np.eye(3) - K @ H) @ self.kalmanP
+        return self.kalmanX
+
 
 def read_pickle(path):
     '''
@@ -148,15 +190,32 @@ def makeVideo(imgPath, picklePath, slicing=(0, -1), videoName='results.avi'):
 
     for i, imgFile in tqdm(enumerate(imgFiles)):
         img = cv2.imread(imgFile) # Read image
+        lastBoundingBox = []
         if results[i]:
-            text = f'Detected: x={results[i][0][7][0]}px , y={results[i][0][7][1]}px, z={results[i][0][7][2]:.2f}m'
-            img = addBoundingBox(img, *results[i][0][:4], boxText=str(results[i][0][6]))
+            if results[i][0][0] != -1:
+                textDet = f'Detected: x={results[i][0][7][0]}px , y={results[i][0][7][1]}px, z={results[i][0][7][2]:.2f}m'
+                lastBoundingBox = results[i][0][:4]
+            else:
+                textDet = f'Detected: x= -px , y= -px, z= -m'
+            textKalman = f'Kalman: x={results[i][0][8][0]:.0f}px , y={results[i][0][8][1]:.0f}px, z={results[i][0][8][2]:.2f}m'
+
+            img = addBoundingBox(img, *results[i][0][:4], boxText=str(results[i][0][6])) # network
+            # img = addBoundingBox(img, *lastBoundingBox, boxText='kalman', color=(255, 0, 255)) # kalman
+            img = cv2.circle(img, (int(results[i][0][8][0]), int(results[i][0][8][1])), 5, (255, 0, 255), 2) # kalman
+            img = cv2.putText(img, 'Kalman', (int(results[i][0][8][0])+7, int(results[i][0][8][1])),cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 255), 2, cv2.LINE_4) # kalman
         else:
-            text = f'Detected: x= -px , y= -px, z= -m'
+            textDet = f'Detected: x= -px , y= -px, z= -m'
         
         cv2.putText(img,
-                text, 
+                textDet, 
                 (50, 50), 
+                cv2.FONT_HERSHEY_SIMPLEX, 1, 
+                (0, 255, 255), 
+                2, 
+                cv2.LINE_4)
+        cv2.putText(img,
+                textKalman, 
+                (50, 80), 
                 cv2.FONT_HERSHEY_SIMPLEX, 1, 
                 (0, 255, 255), 
                 2, 
@@ -197,16 +256,18 @@ def addBoundingBox(img, xmin, ymin, xmax, ymax, boxText, color=(255, 0, 0), thic
     cv2.circle(img, (int((xmin + xmax)/2), int((ymin + ymax)/2)), 5, color, thickness)
     return img
 
+
 if __name__== '__main__':
     # imgs = imgs[0:482] # without occlusions
     # imgs = imgs[0:487] # with occlusions
     # imgs = imgs[90:100] # with occlusions
     # imgs = imgs[1064: 1244] # with occlusions, cup
 
-    left_imgs = 'data/Stereo_conveyor_without_occlusions/left'
-    right_imgs = 'data/Stereo_conveyor_without_occlusions/right'
-    output_path = 'data/results/final_no_occlusions'
+    left_imgs = 'data/Stereo_conveyor_with_occlusions/left'
+    right_imgs = 'data/Stereo_conveyor_with_occlusions/right'
+    output_path = 'data/results/test_with_occlusion_kalman'
+    slicing =(100, 500)
+
+    pred = Predictor(left_imgs, right_imgs, boxModelName= 'only_boxes_best.pt',sliceIndex=slicing, boxSlice=482, outputPath=output_path)
     
-    pred = Predictor(left_imgs, right_imgs, boxModelName= 'bestest.pt',sliceIndex=(50, 60), boxSlice=482, outputPath=output_path)
-    
-    makeVideo(imgPath=left_imgs, picklePath=f'{output_path}/results.pkl', slicing=(0, -1), videoName='testing.avi')
+    makeVideo(imgPath=left_imgs, picklePath=f'{output_path}/results.pkl', slicing=slicing, videoName='with_ocl.avi')
