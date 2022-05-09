@@ -10,7 +10,15 @@ from calibration import *
 from depth_map import *
 
 class Predictor:
-    def __init__(self, left_imgs, right_imgs=None, sliceIndex=(0,-1), boxSlice = 0, boxModelName='bestest.pt', modelPath='data/yoloModels/', outputPath='data/results'):
+    def __init__(self, left_imgs, 
+                right_imgs=None, 
+                sliceIndex=(0,-1), 
+                boxSlice = 0, 
+                boxModelName='bestest.pt', 
+                modelPath='data/yoloModels/', 
+                outputPath='data/results'):
+        '''
+        Initialize the predictor'''
         self.picklePath = f'{outputPath}/results.pkl'
         self.boxSlice = boxSlice
         if  type(left_imgs) == str:
@@ -58,6 +66,9 @@ class Predictor:
         return f'{len(self.left_imgs)} images, {self.totalPredictions} predictions'
 
     def calculateDepth(self, left_img, right_img, x_px, y_px):
+        """
+        Calculates the depth of the object at the given pixel location.
+        """
         calib = Calibration(None,None,None)
         calib.load("Calibration_result.bin")
 
@@ -71,6 +82,9 @@ class Predictor:
         return depth
 
     def getPredictions(self):
+        '''
+        Get predictions from yolo and box models and save them to a pickle file'''
+
         for i in tqdm(range(len(self.left_imgs))):
             if i < self.boxSlice:
                 currResult = self.model_box(self.left_imgs[i]).pandas().xyxy[0].to_numpy()
@@ -131,6 +145,8 @@ class Predictor:
         print(f'Saved results to {self.picklePath}, {len(self.results)} images, added {self.totalPredictions} predictions')
 
     def getCenter(self, xmin, ymin, xmax, ymax):
+        '''
+        Get the center of the bounding box'''
         return [int((xmin + xmax)/2), int((ymin + ymax)/2)]
 
     def kalman_position(self, z):
@@ -249,7 +265,7 @@ def addBoundingBox(img, xmin, ymin, xmax, ymax, boxText, color=(255, 0, 50), thi
     '''
     xmin, xmax, ymin, ymax = int(xmin), int(xmax), int(ymin), int(ymax)
     
-    # check if box is too big
+    # check if box is too big, to avoid predicting the wall as a box
     x_max, y_max = 300, 300
     if xmax - xmin > x_max or ymax - ymin > y_max:
         return img
@@ -275,8 +291,8 @@ if __name__== '__main__':
 
     left_imgs = 'data/Stereo_conveyor_with_occlusions/left'
     right_imgs = 'data/Stereo_conveyor_with_occlusions/right'
-    output_path = 'data/results/test_with_occlusion_kalman_TEST'
+    output_path = 'data/results/test'
     slicing =(0, -1)
 
     pred = Predictor(left_imgs, right_imgs, boxModelName= 'only_boxes_best.pt',sliceIndex=slicing, boxSlice=487, outputPath=output_path)
-    makeVideo(imgPath=left_imgs, picklePath=f'{output_path}/results.pkl', slicing=slicing, videoName='with_ocl_final_TEST.avi')
+    makeVideo(imgPath=left_imgs, picklePath=f'{output_path}/results.pkl', slicing=slicing, videoName='result.avi')
